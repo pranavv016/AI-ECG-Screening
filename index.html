@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI-Assisted ECG Screening System</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/gh/KovacsGG/mat4js/dist/mat4js.read.min.js"></script>
+</head>
+<body>
+
+  <!-- ============ DISCLAIMER BANNER ============ -->
+  <div class="disclaimer-banner" role="alert">
+    <span class="disclaimer-banner__icon" aria-hidden="true">&#9888;</span>
+    <p><strong>Educational/Research Prototype &mdash; Not a Clinical Diagnostic Device.</strong>
+    This system is intended for educational and research purposes only. It must not be used to diagnose, treat, or make medical decisions.</p>
+  </div>
+
+  <!-- ============ HEADER ============ -->
+  <header class="site-header">
+    <div class="site-header__inner">
+      <div class="site-header__brand">
+        <span class="pulse-mark" aria-hidden="true">
+          <svg viewBox="0 0 120 40" width="48" height="16">
+            <polyline points="0,20 28,20 34,6 40,34 46,20 120,20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div>
+          <h1>AI-Assisted ECG Screening System</h1>
+          <p class="subtitle">ECG signal analysis for educational and research purposes</p>
+        </div>
+      </div>
+      <div class="site-header__status">
+        <span class="status-dot" id="pipelineStatus" aria-hidden="true"></span>
+        <span id="pipelineStatusText">No signal loaded</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="dashboard">
+
+    <!-- ============ UPLOAD SECTION ============ -->
+    <section class="panel panel--upload" aria-labelledby="upload-heading">
+      <div class="panel__head">
+        <h2 id="upload-heading">Load an ECG Signal</h2>
+        <p class="panel__hint">Accepted: .csv ECG files using <code>time,amplitude</code> or a single <code>amplitude</code> column.</p>
+      </div>
+
+      <div class="upload-primary-grid">
+        <div class="upload-primary-area">
+          <div class="upload-row">
+            <label class="btn btn--primary" for="ecgFileInput">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0-12 5 5m-5-5-5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              Upload ECG
+              <input type="file" id="ecgFileInput" accept=".csv,.mat,.edf,.txt,text/csv,text/plain,application/octet-stream" hidden />
+            </label>
+
+            <button class="btn btn--secondary" id="demoBtn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 12 9 12 11 6 14 18 16 12 20 12"/></svg>
+              Try Demo ECG
+            </button>
+
+            <button class="btn btn--primary" id="analyzeBtn" type="button">
+              Analyze ECG
+            </button>
+
+            <button class="btn btn--ghost" id="clearBtn" type="button" disabled>
+              Clear
+            </button>
+          </div>
+
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Drag and drop an ECG file here, or press Enter to browse files">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0 4 4m-4-4-4 4"/><rect x="3" y="16" width="18" height="5" rx="1.5"/></svg>
+            <p><strong>Drag &amp; drop</strong> an ECG file here, or click to browse</p>
+            <p class="dropzone__formats">Supported: .CSV &middot; .MAT &middot; .EDF &middot; .TXT</p>
+            <p class="dropzone__meta" id="fileMeta">No file selected</p>
+          </div>
+        </div>
+
+        <div class="dataset-picker">
+          <label for="datasetSelect">Pre-loaded sample dataset</label>
+          <select id="datasetSelect" class="select-control">
+            <option value="demo">Demo ECG &mdash; simulated/educational</option>
+            <option value="mitbih-normal">MIT-BIH-derived benchmark &mdash; sample beat</option>
+            <option value="ptb-normal">PTB Diagnostic Database &mdash; sample beat</option>
+          </select>
+          <p class="control-help">Benchmark samples are loaded from public sample files and are for demonstration/research only. They are not presented as a patient's live clinical record.</p>
+          <button class="btn btn--secondary btn--full" id="loadDatasetBtn" type="button">Load selected dataset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ECG DATA INFORMATION ============ -->
+    <section class="panel panel--signal-info" aria-labelledby="signal-info-heading">
+      <div class="panel__head">
+        <h2 id="signal-info-heading">ECG Data Information</h2>
+      </div>
+      <div class="signal-info-grid">
+        <div class="signal-info-card">
+          <span>Filename</span>
+          <strong id="signalFilename">—</strong>
+        </div>
+        <div class="signal-info-card">
+          <span>Samples</span>
+          <strong id="signalSamples">—</strong>
+        </div>
+        <div class="signal-info-card">
+          <span>Duration</span>
+          <strong id="signalDuration">—</strong>
+        </div>
+        <div class="signal-info-card">
+          <span>Sampling Rate</span>
+          <strong id="signalSamplingRate">—</strong>
+        </div>
+      </div>
+      <p class="signal-message" id="signalMessage">
+        Load a CSV ECG signal to populate these fields.
+      </p>
+    </section>
+
+    <!-- ============ PART 3: ECG VISUALIZATION ============ -->
+    <section class="panel panel--waveform" aria-labelledby="waveform-heading">
+      <div class="panel__head">
+        <div>
+          <h2 id="waveform-heading">RAW ECG SIGNAL</h2>
+          <p class="panel__hint">Interactive raw waveform visualization before backend preprocessing.</p>
+        </div>
+        <div class="waveform-controls">
+          <label for="leadSelect">Lead</label>
+          <select id="leadSelect" class="select-control select-control--compact">
+            <option value="0">Lead I</option>
+            <option value="1">Lead II</option>
+            <option value="2">Lead III</option>
+            <option value="3">aVR</option>
+            <option value="4">aVL</option>
+            <option value="5">aVF</option>
+            <option value="6">V1</option>
+            <option value="7">V2</option>
+            <option value="8">V3</option>
+            <option value="9">V4</option>
+            <option value="10">V5</option>
+            <option value="11">V6</option>
+          </select>
+          <span class="lead-tag" id="leadTag">Lead: —</span>
+        </div>
+      </div>
+
+      <div class="waveform-stage" id="waveformStage">
+        <canvas id="ecgGridCanvas" class="ecg-grid-canvas" aria-hidden="true"></canvas>
+        <div id="ecgPlot" class="ecg-plot" role="img" aria-label="Interactive raw ECG waveform"></div>
+        <canvas id="ecgMarkerCanvas" class="ecg-marker-canvas" aria-label="Interactive ECG fiducial markers"></canvas>
+        <div class="waveform-placeholder" id="waveformPlaceholder">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 12 7 12 9 6 13 18 16 12 22 12"/></svg>
+          <p>No ECG signal loaded yet</p>
+          <p class="waveform-placeholder__hint">The demo ECG loads automatically, or upload another CSV to update the graph.</p>
+        </div>
+      </div>
+
+      <div class="plot-help">
+        <span><strong>Zoom:</strong> drag on the graph</span>
+        <span><strong>Pan:</strong> shift + drag</span>
+        <span><strong>Reset:</strong> click the reset/house icon in the toolbar</span>
+        <span><strong>Details:</strong> hover over the waveform</span>
+      </div>
+    </section>
+
+
+    <!-- ============ PART 4: PREPROCESSED ECG ============ -->
+    <section class="panel panel--waveform" aria-labelledby="preprocessed-heading">
+      <div class="panel__head">
+        <div>
+          <h2 id="preprocessed-heading">PREPROCESSED ECG</h2>
+          <p class="panel__hint">Zero-phase band-pass filtering, optional mains notch filtering, and normalization. No machine learning is used.</p>
+        </div>
+        <span class="lead-tag" id="preprocessTag">Waiting for ECG</span>
+      </div>
+
+      <div class="waveform-stage" id="processedWaveformStage">
+        <div id="processedEcgPlot" class="ecg-plot" role="img" aria-label="Processed ECG waveform"></div>
+        <div class="waveform-placeholder" id="processedWaveformPlaceholder">
+          <p>Preprocessed ECG will appear here after analysis.</p>
+        </div>
+      </div>
+
+      <p class="signal-message" id="preprocessingMessage">No preprocessing has been performed yet.</p>
+    </section>
+
+    <!-- ============ PART 4: EXTRACTED FEATURES ============ -->
+    <section class="panel" aria-labelledby="features-heading">
+      <div class="panel__head">
+        <div>
+          <h2 id="features-heading">EXTRACTED ECG FEATURES</h2>
+          <p class="panel__hint">Values are calculated from the processed signal returned by the Python backend.</p>
+        </div>
+      </div>
+
+      <dl class="metric-grid feature-grid">
+        <div class="metric-card"><dt>Heart Rate</dt><dd id="featureHeartRate">— <span class="metric-card__unit">BPM</span></dd></div>
+        <div class="metric-card"><dt>R-Peaks</dt><dd id="featureRPeaks">—</dd></div>
+        <div class="metric-card"><dt>Mean RR</dt><dd id="featureMeanRR">— <span class="metric-card__unit">s</span></dd></div>
+        <div class="metric-card"><dt>Mean Amplitude</dt><dd id="featureMeanAmplitude">—</dd></div>
+        <div class="metric-card"><dt>Standard Deviation</dt><dd id="featureStd">—</dd></div>
+        <div class="metric-card"><dt>Minimum Amplitude</dt><dd id="featureMin">—</dd></div>
+        <div class="metric-card"><dt>Maximum Amplitude</dt><dd id="featureMax">—</dd></div>
+        <div class="metric-card"><dt>Signal Range</dt><dd id="featureRange">—</dd></div>
+        <div class="metric-card"><dt>RMS</dt><dd id="featureRms">—</dd></div>
+        <div class="metric-card"><dt>Signal Quality</dt><dd id="featureQuality">—</dd></div>
+      </dl>
+      <p class="result-note" id="featureStatusMessage">Features are unavailable until an ECG is successfully processed.</p>
+    </section>
+
+    <!-- ============ AI SCREENING RESULT ============ -->
+    <section class="panel panel--result" aria-labelledby="result-heading">
+      <div class="panel__head">
+        <h2 id="result-heading">AI Screening Result</h2>
+        <span class="badge badge--pending" id="mlStatusBadge">Model not loaded</span>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-card">
+          <span class="result-card__label">Classification</span>
+          <span class="result-card__value" id="resultClassification">&mdash;</span>
+        </div>
+        <div class="result-card">
+          <span class="result-card__label">Possible Pattern / Category</span>
+          <span class="result-card__value" id="resultPattern">&mdash;</span>
+        </div>
+        <div class="result-card">
+          <span class="result-card__label">Model Confidence</span>
+          <span class="result-card__value" id="resultConfidence">&mdash;</span>
+        </div>
+      </div>
+
+      <p class="result-note" id="mlResultNote">Click “Analyze ECG” to run FastAPI → preprocessing → feature extraction → the trained ML model. The model supports only a 187-sample segmented heartbeat and returns NORMAL or ABNORMAL; it does not diagnose disease.</p>
+    </section>
+
+    <!-- ============ EDUCATIONAL INFORMATION ============ -->
+    <section class="panel panel--edu" aria-labelledby="edu-heading">
+      <div class="panel__head">
+        <h2 id="edu-heading">Educational Information</h2>
+      </div>
+
+      <div class="edu-grid">
+        <div class="edu-block">
+          <h3>What is ECG screening?</h3>
+          <p>An electrocardiogram (ECG) records the electrical activity of the heart over time using electrodes placed on the skin. Each heartbeat produces a characteristic waveform &mdash; the P wave, QRS complex, and T wave &mdash; that reflects the timing of electrical signals through the atria and ventricles.</p>
+          <p>Automated ECG screening tools attempt to identify patterns in this waveform, such as heart rate, rhythm regularity, and waveform shape, that may be associated with certain cardiac conditions. In research settings, machine learning models are trained on large labeled datasets to recognize these patterns.</p>
+        </div>
+        <div class="edu-block">
+          <h3>Limitations of this prototype</h3>
+          <ul>
+            <li>Part 5 adds a supervised Random Forest benchmark for NORMAL vs ABNORMAL classification of 187-sample MIT-BIH-derived heartbeat segments.</li>
+            <li>Even a completed version would not replace interpretation by a qualified clinician.</li>
+            <li>ECG interpretation software can be affected by noise, electrode placement, and signal artifacts.</li>
+            <li>This tool has not been validated, tested, or approved for any clinical or diagnostic use.</li>
+            <li>Results from prototype systems like this should never inform real medical decisions.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <p><strong>Educational/Research Prototype &mdash; Not a Clinical Diagnostic Device.</strong></p>
+    <p>This system is intended for educational and research purposes only. It must not be used to diagnose, treat, or make medical decisions.</p>
+  </footer>
+
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
